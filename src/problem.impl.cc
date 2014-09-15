@@ -192,7 +192,8 @@ namespace hpp
 
       void Problem::createOrientationConstraint
       (const char* constraintName, const char* joint1Name,
-       const char* joint2Name, const Double* p) throw (hpp::Error)
+       const char* joint2Name, const Double* p, const hpp::boolSeq& mask)
+	throw (hpp::Error)
       {
 	JointPtr_t joint1;
 	JointPtr_t joint2;
@@ -200,6 +201,11 @@ namespace hpp
 	fcl::Quaternion3f quat (p [0], p [1], p [2], p [3]);
 	hpp::model::matrix3_t rotation;
 	quat.toRotation (rotation);
+        if (mask.length () != 3)
+	  throw hpp::Error ("Mask must be of length 3");
+        std::vector<bool> m(3);
+	for (size_t i=0; i<3; i++)
+	  m[i] = mask[i];
 
 	try {
 	  // Test whether joint1 is world frame
@@ -226,14 +232,12 @@ namespace hpp
 	  // Both joints are provided
 	  problemSolver_->addNumericalConstraint
 	    (std::string(constraintName), RelativeOrientation::create
-	      (problemSolver_->robot(), joint1, joint2, rotation,
-	      boost::assign::list_of(true)(true)(true)) );
+	      (problemSolver_->robot(), joint1, joint2, rotation, m));
 	} else {
 	  JointPtr_t joint = constrainedJoint == 1 ? joint1 : joint2;
 	  problemSolver_->addNumericalConstraint
 	    (std::string(constraintName), Orientation::create
-	      (problemSolver_->robot(), joint, rotation,
-	      boost::assign::list_of(true)(true)(true)) );
+	      (problemSolver_->robot(), joint, rotation, m));
 	}
       }
 
@@ -295,6 +299,204 @@ namespace hpp
 	}
       }
 
+
+      // ---------------------------------------------------------------
+
+
+      void Problem::createHeightPositionConstraint
+      (const char* constraintName, const char* jointName,
+       const double height)
+	throw (hpp::Error)
+      {
+	JointPtr_t joint = 
+          problemSolver_->robot()->getJointByName(jointName);
+        vector3_t zero; zero.setZero ();
+        hpp::model::matrix3_t I3; I3.setIdentity ();
+	vector3_t p = (0, 0, height);
+        problemSolver_->addNumericalConstraint
+	    (std::string (constraintName), Position::create
+	     (problemSolver_->robot(), joint, zero, p, I3, 
+              boost::assign::list_of (false)(false)(true)));
+      }
+
+      // ---------------------------------------------------------------
+
+
+      void Problem::createComRelativePositionConstraint
+      (const char* constraintName, const char* jointName,
+       const hpp::floatSeq& point, const hpp::floatSeq& axis,
+       const hpp::floatSeq& dofArray)
+	throw (hpp::Error)
+      {
+        try {
+	  ConfigurationPtr_t config = floatSeqToConfig (problemSolver_,
+							dofArray);
+	  const DevicePtr_t& robot (problemSolver_->robot ());
+	  if (!robot) {
+	    throw Error ("You should set the robot before defining"
+			 " constraints.");
+	  }
+        robot->currentConfiguration (*config);
+        robot->computeForwardKinematics ();
+	JointPtr_t joint =
+	      problemSolver_->robot()->getJointByName(jointName);
+
+        const Transform3f& M = joint->currentTransformation ();
+        const vector3_t& x = robot->positionCenterOfMass ();
+	vector3_t p = floatSeqTVector3 (point);
+        vector3_t a = floatSeqTVector3 (axis);
+	std::vector<bool> ax;
+        ax.clear();	ax.resize(3);
+        for(std::size_t i=0; i<3; ++i)
+        {
+          if( a[i] == 1.0 )
+            ax[i] = true;
+          else if(a[i] == 0.0 )
+            ax[i] = false;
+          else
+          {
+            a[i] = 1.0;
+            ax[i] = true;
+          }
+        }
+        hpp::model::matrix3_t I (a[0], 0.0, 0.0, 0.0, a[1], 0.0, 0.0, 0.0, a[2]);
+        
+       
+	hpp::model::matrix3_t RT (M.getRotation ());   RT.transpose ();
+        vector3_t xloc = I * ( RT * (x - M.getTranslation ()) - p);
+
+	problemSolver_->addNumericalConstraint
+	    (std::string (constraintName), RelativeCom::create (robot, joint, 
+             xloc, ax));
+	
+	} catch (const std::exception& exc) {
+        throw hpp::Error (exc.what ());
+        }
+      }
+
+
+
+      // ---------------------------------------------------------------
+
+
+      void Problem::createFeetOnFloorConstraint
+      (const char* prefix, const hpp::floatSeq& dofArray,
+       const char* leftAnkle, const char* rightAnkle)
+	throw (hpp::Error)
+      {
+	using core::DifferentiableFunctionPtr_t;
+	try {
+	  ConfigurationPtr_t config = floatSeqToConfig (problemSolver_,
+							dofArray);
+	  const DevicePtr_t& robot (problemSolver_->robot ());
+	  if (!robot) {
+	    throw Error ("You should set the robot before defining"
+			 " constraints.");
+	  }
+        std::string p (prefix);
+        JointPtr_t la = robot->getJointByName (leftAnkle);
+        JointPtr_t ra = robot->getJointByName (rightAnkle);
+        robot->currentConfiguration (*config);
+        robot->computeForwardKinematics ();
+        const Transform3f& M1 = la->currentTransformation ();
+        const Transform3f& M2 = ra->currentTransformation ();
+
+        hpp::model::matrix3_t reference;
+        reference.setIdentity ();
+        // Orientation of the left foot
+	  
+	problemSolver_->addNumericalConstraint
+	    (p + std::string ("/orientation-leftFoot"), 
+             Orientation::create (robot, la, reference, 
+              boost::assign::list_of (true)(true)(false)));
+        // Orientation of the right foot
+        problemSolver_->addNumericalConstraint
+	    (p + std::string ("/orientation-rightFoot"),
+             Orientation::create (robot, ra, reference, 
+              boost::assign::list_of (true)(true)(false)));
+
+        // Position of the left foot
+        vector3_t zero; zero.setZero ();
+        hpp::model::matrix3_t I3; I3.setIdentity ();
+        problemSolver_->addNumericalConstraint
+         (p + std::string ("/position-leftFoot"), Position::create 
+          (robot, la, zero, M1.getTranslation (), I3,
+	    boost::assign::list_of (false)(false)(true)));
+
+        // Position of the right foot
+        problemSolver_->addNumericalConstraint
+         (p + std::string ("/position-rightFoot"), Position::create 
+          (robot, ra, zero, M2.getTranslation (), I3,
+	    boost::assign::list_of (false)(false)(true)));
+
+	} catch (const std::exception& exc) {
+        throw hpp::Error (exc.what ());
+        }
+      }
+
+
+      // ---------------------------------------------------------------
+
+
+      void Problem::createComCenterPositionConstraint
+      (const char* constraintName, const char* leftAnkle,
+       const char* rightAnkle, const hpp::floatSeq& axis,
+       const hpp::floatSeq& dofArray)
+	throw (hpp::Error)
+      {
+        try {
+	  ConfigurationPtr_t config = floatSeqToConfig (problemSolver_,
+							dofArray);
+	  const DevicePtr_t& robot (problemSolver_->robot ());
+	  if (!robot) {
+	    throw Error ("You should set the robot before defining"
+			 " constraints.");
+	  }
+        robot->currentConfiguration (*config);
+        robot->computeForwardKinematics ();
+	JointPtr_t la = problemSolver_->robot()->getJointByName(leftAnkle);
+	JointPtr_t ra = problemSolver_->robot()->getJointByName(rightAnkle);
+
+        const Transform3f& Ml = la->currentTransformation ();
+        const Transform3f& Mr = ra->currentTransformation ();
+        const vector3_t& x = robot->positionCenterOfMass ();
+        vector3_t a = floatSeqTVector3 (axis);
+	std::vector<bool> ax;
+        ax.clear();	ax.resize(3);
+        for(std::size_t i=0; i<3; ++i)
+        {
+          if( a[i] == 1.0 )
+            ax[i] = true;
+          else if(a[i] == 0.0 )
+            ax[i] = false;
+          else
+          {
+            a[i] = 1.0;
+            ax[i] = true;
+          }
+        }
+        hpp::model::matrix3_t I (a[0], 0.0, 0.0, 0.0, a[1], 0.0, 0.0, 0.0, a[2]);
+  
+        vector3_t pl = Ml.getTranslation();
+	vector3_t pr = Mr.getTranslation();
+        double xc = 0.5 * (pl[0] + pr[0]);
+        double yc = 0.5 * (pl[1] + pl[1]);
+        vector3_t center (xc, yc, x[2]);
+
+	hpp::model::matrix3_t RT (Ml.getRotation ());   RT.transpose ();
+        vector3_t xloc = RT * ( I * (x - pl) - I * (center - pl) );
+
+	problemSolver_->addNumericalConstraint
+	    (std::string (constraintName), RelativeCom::create (robot, la, 
+             xloc, ax));
+	
+	} catch (const std::exception& exc) {
+        throw hpp::Error (exc.what ());
+        }
+      }
+
+
+
       // ---------------------------------------------------------------
 
       bool Problem::applyConstraints (const hpp::floatSeq& input,
@@ -321,6 +523,46 @@ namespace hpp
 	  (*q_ptr) [i] = (*config) [i];
 	}
 	output = q_ptr;
+	return success;
+      }
+
+
+      // ---------------------------------------------------------------
+
+      bool Problem::projectConfiguration (const hpp::floatSeq& input,
+                                      const hpp::floatSeq& reference,
+				      hpp::floatSeq_out output,
+				      double& residualError)
+	throw (hpp::Error)
+      {
+	bool success = false, middle = false;
+	ConfigurationPtr_t qfrom = floatSeqToConfig (problemSolver_, input);
+     	ConfigurationPtr_t qto = floatSeqToConfig (problemSolver_, reference);
+	Configuration_t qfinal (input.length());
+	hpp::core::ConfigProjectorPtr_t configProjector;
+	try {
+	  success = problemSolver_->constraints ()->apply (*qfrom);   //First project to satisfy constraints
+	  if (configProjector = problemSolver_->constraints ()->configProjector ())
+          {
+            configProjector->projectOnKernel (*qfrom, *qto, qfinal);
+            middle = problemSolver_->constraints ()->apply (qfinal);   //Project the result to satisfy constraints
+            if (hpp::core::ConfigProjectorPtr_t configProj =
+	      problemSolver_->constraints ()->configProjector ()) {
+	      residualError = configProj->residualError ();
+            }
+	  }
+	} catch (const std::exception& exc) {
+	  throw hpp::Error (exc.what ());
+	}
+        ULong size = (ULong) qfinal.size ();
+	hpp::floatSeq* q_ptr = new hpp::floatSeq ();
+	q_ptr->length (size);
+
+	for (std::size_t i=0; i<size; ++i) {
+	  (*q_ptr) [i] = (qfinal) [i];
+	}
+	output = q_ptr;
+        success = success && middle;
 	return success;
       }
 

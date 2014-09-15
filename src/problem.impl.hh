@@ -46,7 +46,8 @@ namespace hpp
 
 	virtual void createOrientationConstraint
 	(const char* constraintName, const char* joint1Name,
-	 const char* joint2Name, const Double* p) throw (hpp::Error);
+	 const char* joint2Name, const Double* p, const hpp::boolSeq& mask)
+	  throw (hpp::Error);
 
 	virtual void createPositionConstraint (const char* constraintName,
 					       const char* joint1Name,
@@ -55,10 +56,40 @@ namespace hpp
 					       const hpp::floatSeq& point2)
 	  throw (hpp::Error);
 
+        virtual void createHeightPositionConstraint (const char* constraintName, 
+						     const char* jointName,
+				         	     const double height)
+	  throw (hpp::Error);
+
+        virtual void createComRelativePositionConstraint
+        (const char* constraintName, const char* jointName,
+         const hpp::floatSeq& point, const hpp::floatSeq& axis,
+         const hpp::floatSeq& dofArray)
+	  throw (hpp::Error);
+
+        virtual void createFeetOnFloorConstraint (const char* prefix, 
+						  const hpp::floatSeq& dofArray,
+						  const char* leftAnkle, 
+						  const char* rightAnkle)
+	  throw (hpp::Error);
+
+        virtual void createComCenterPositionConstraint
+        (const char* constraintName, const char* leftAnkle,
+         const char* rightAnkle, const hpp::floatSeq& axis,
+         const hpp::floatSeq& dofArray)
+	  throw (hpp::Error);          
+
 	virtual bool applyConstraints (const hpp::floatSeq& input,
 				       hpp::floatSeq_out output,
 				       Double& residualError)
 	  throw (hpp::Error);
+
+        virtual bool projectConfiguration (const hpp::floatSeq& input,
+                                            const hpp::floatSeq& reference,
+				            hpp::floatSeq_out output,
+				            double& residualError)
+	throw (hpp::Error);
+
 	virtual void resetConstraints () throw (hpp::Error);
 	virtual void setNumericalConstraints
 	(const char* constraintName, const hpp::Names_t& constraintNames)

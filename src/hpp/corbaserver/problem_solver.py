@@ -87,13 +87,14 @@ class ProblemSolver (object):
     #  \param joint2Name name of second joint
     #  \param p quaternion representing the desired orientation
     #         of joint2 in the frame of joint1.
+    #  \param mask Select which axis to be constrained.
     #  If joint1 of joint2 is "", the corresponding joint is replaced by
     #  the global frame.
     #  constraints are stored in ProblemSolver object
     def createOrientationConstraint (self, constraintName, joint1Name,
-                                     joint2Name, p):
+                                     joint2Name, p, mask):
         return self.client.problem.createOrientationConstraint \
-            (constraintName, joint1Name, joint2Name, p)
+            (constraintName, joint1Name, joint2Name, p, mask)
 
     ## Create position constraint between two joints
     #
@@ -109,6 +110,67 @@ class ProblemSolver (object):
                                   joint2Name, point1, point2):
         return self.client.problem.createPositionConstraint \
             (constraintName, joint1Name, joint2Name, point1, point2)
+
+    ## Create position constraint between two joints only in "z" axis
+    #
+    #  \param constraintName name of the constraint created,
+    #  \param joint1Name name of first joint
+    #  \param joint2Name name of second joint
+    #  \param point1 point in local frame of joint1,
+    #  \param point2 point in local frame of joint2.
+    #  If joint1 of joint2 is "", the corresponding joint is replaced by
+    #  the global frame.
+    #  constraints are stored in ProblemSolver object
+    def createHeightPositionConstraint (self, constraintName, 
+                                         jointName, height):
+        return self.client.problem.createHeightPositionConstraint \
+            (constraintName, jointName, height)
+
+    # Creates position constraint between the center of mass and a joint
+    #
+    # \param constraintName name of the constraint created,
+    # \param jointName name of the joint
+    # \param point is the desired position of the center of mass in local frame of joint
+    # \param axis selects which axis (x, y, z) is constrained. Should be given values of 1 or 0 only  
+    # \param dofArray input configuration for computing constraint reference     
+    # 
+    # Constraints are stored in ProblemSolver object
+    def createComRelativePositionConstraint (self, constraintName,
+                            jointName, point, axis, dofArray): 
+        return self.client.problem.createComRelativePositionConstraint \
+            (constraintName, jointName, point, axis, dofArray)
+
+    # Creates constraints for the feet's plants to stay in contact with the floor and stores them into ProblemSolver
+    # \param prefix prefix of the names of the constraints as stored in
+    #        core::ProblemSolver,
+    # \param dofArray input configuration for computing constraint reference,
+    # \param leftAnkle, rightAnkle: names of the ankle joints.
+    #
+    # Four constraints are created and store with the following keys by
+    # calling method core::ProblemSolver::addNumericalConstraint:
+    # \li prefix + "/orientation-leftFoot": orientation of the left foot
+    # \li prefix + "/orientation-rightFoot": orientation of the right foot
+    # \li prefix + "/position-leftFoot": position of the left foot.
+    # \li prefix + "/position-rightFoot": position of the right foot.
+
+    def createFeetOnFloorConstraint (self, prefix, dofArray, 
+				      leftAnkle, rightAnkle):
+        return self.client.problem.createFeetOnFloorConstraint \
+            (prefix, dofArray, leftAnkle, rightAnkle)
+
+    # Creates position constraint for the center of mass to be at the center of the support polygon
+    #
+    # \param constraintName name of the constraint created,
+    # \param leftAnkle, rightAnkle: names of the ankle joints.
+    # \param axis selects which axis (x, y, z) is constrained. Should be given values of 1 or 0 only  
+    # \param dofArray input configuration for computing constraint reference     
+    # 
+    # Constraints are stored in ProblemSolver object
+    def createComCenterPositionConstraint (self, constraintName,
+                            leftAnkle, rightAnkle, axis, dofArray): 
+        return self.client.problem.createComCenterPositionConstraint \
+            (constraintName, leftAnkle, rightAnkle, axis, dofArray)
+
 
     ## Reset Constraints
     #
@@ -133,6 +195,16 @@ class ProblemSolver (object):
     #  \throw Error if projection failed.
     def applyConstraints (self, q):
         return self.client.problem.applyConstraints (q)
+
+    ## Constraints a configuration into the tangent space of another 
+    #   (reference) constrained configuration
+    #
+    #  \param input initial configuration
+    #  \param reference reference configuration 
+    #  \return configuration projected in success,
+    #  \throw Error if projection failed.
+    def projectConfiguration (self, q, reference):
+        return self.client.problem.projectConfiguration (q, reference)
 
     ## Lock degree of freedom with given value
     # \param jointName name of the joint
@@ -181,6 +253,10 @@ class ProblemSolver (object):
     def numberPaths (self):
         return self.client.problem.numberPaths ()
 
+    ## Set the maximal number of iterations
+    def setMaxIterations (self, iterations):
+	return self.client.problem.setMaxIterations (iterations)
+
     ## Optimize a given path
     # \param inPathId Id of the path in this problem.
     # \throw Error.
@@ -192,6 +268,10 @@ class ProblemSolver (object):
     # \return length of path if path exists.
     def pathLength(self, inPathId):
         return self.client.problem.pathLength(inPathId)
+
+    ## Get nodes of the roadmap.
+    def nodes(self):
+	return self.client.problem.nodes ()
 
     ## Get the robot's config at param on the a path
     # \param inPathId rank of the path in the problem
