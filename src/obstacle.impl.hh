@@ -30,8 +30,13 @@ namespace hpp
 	Obstacle (corbaServer::Server* server);
 
 	virtual void loadObstacleModel (const char* package,
-					 const char* filename)
+					const char* filename,
+					const char* prefix)
 	  throw (hpp::Error);
+
+	virtual void removeObstacleFromJoint
+	(const char* objectName, const char* jointName, Boolean collision,
+	 Boolean distance) throw (hpp::Error);
 
 	virtual	void
 	addObstacle (const char* polyhedronName, Boolean collision,

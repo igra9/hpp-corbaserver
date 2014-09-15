@@ -31,7 +31,8 @@ namespace hpp
       {}
 
       void Obstacle::loadObstacleModel (const char* package,
-					const char* filename)
+					const char* filename,
+					const char* prefix)
 	throw (hpp::Error)
       {
 	try {
@@ -44,9 +45,68 @@ namespace hpp
 	  // Detach objects from joints
 	  for (ObjectIterator itObj = device->objectIterator
 		 (hpp::model::COLLISION); !itObj.isEnd (); ++itObj) {
-	    (*itObj)->joint (0x0);
-	    problemSolver_->addObstacle (*itObj, true, true);
-	    hppDout (info, "Adding obstacle " << (*itObj)->name ());
+	    CollisionObjectPtr_t obj = model::CollisionObject::create
+	      ((*itObj)->fcl ()->collisionGeometry(), (*itObj)->getTransform (),
+	       std::string (prefix) + (*itObj)->name ());
+	    problemSolver_->addObstacle (obj, true, true);
+	    hppDout (info, "Adding obstacle " << obj->name ());
+	  }
+	} catch (const std::exception& exc) {
+	  throw hpp::Error (exc.what ());
+	}
+      }
+
+      void Obstacle::removeObstacleFromJoint
+      (const char* objectName, const char* jointName, Boolean collision,
+       Boolean distance) throw (hpp::Error)
+      {
+	using model::JointPtr_t;
+	using model::ObjectVector_t;
+	using model::COLLISION;
+	using model::DISTANCE;
+	std::string objName (objectName);
+	std::string jName (jointName);
+
+	try {
+	  JointPtr_t joint = problemSolver_->robot ()->getJointByName (jName);
+	  BodyPtr_t body = joint->linkedBody ();
+	  if (!body) {
+	    throw std::runtime_error
+	      (std::string ("Joint " + jName + std::string (" has no body.")));
+	  }
+	  if (collision) {
+	    bool found = false;
+	    for (ObjectVector_t::const_iterator itObj =
+		   body->outerObjects (COLLISION).begin ();
+		 itObj != body->outerObjects (COLLISION).end () &&
+		   !found; ++itObj) {
+	      if ((*itObj)->name () == objName) {
+		found = true;
+		body->removeOuterObject (*itObj, true, false);
+	      }
+	    }
+	    if (!found) {
+	      throw std::runtime_error
+		(std::string ("Joint ") + jName +
+		 std::string (" has no outer object called ") + objName);
+	    }
+	  }
+	  if (distance) {
+	    bool found = false;
+	    for (ObjectVector_t::const_iterator itObj =
+		   body->outerObjects (DISTANCE).begin ();
+		 itObj != body->outerObjects (DISTANCE).end () &&
+		   !found; ++itObj) {
+	      if ((*itObj)->name () == objName) {
+		found = true;
+		body->removeOuterObject (*itObj, false, true);
+	      }
+	    }
+	    if (!found) {
+	      throw std::runtime_error
+		(std::string ("Joint ") + jName +
+		 std::string (" has no outer object called ") + objName);
+	    }
 	  }
 	} catch (const std::exception& exc) {
 	  throw hpp::Error (exc.what ());
