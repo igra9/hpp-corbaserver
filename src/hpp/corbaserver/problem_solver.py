@@ -88,9 +88,9 @@ class ProblemSolver (object):
     #  \param joint2Name name of second joint
     #  \param p quaternion representing the desired orientation
     #         of joint2 in the frame of joint1.
-    #  \param mask Select which axis to be constrained.
     #  If joint1 of joint2 is "", the corresponding joint is replaced by
     #  the global frame.
+    #  \param mask Select which axis to be constrained.
     #  constraints are stored in ProblemSolver object
     def createOrientationConstraint (self, constraintName, joint1Name,
                                      joint2Name, p, mask):
@@ -106,11 +106,12 @@ class ProblemSolver (object):
     #  \param point2 point in local frame of joint2.
     #  If joint1 of joint2 is "", the corresponding joint is replaced by
     #  the global frame.
+    #  \param mask Select which axis to be constrained.
     #  constraints are stored in ProblemSolver object
     def createPositionConstraint (self, constraintName, joint1Name,
-                                  joint2Name, point1, point2):
+                                  joint2Name, point1, point2, mask):
         return self.client.problem.createPositionConstraint \
-            (constraintName, joint1Name, joint2Name, point1, point2)
+            (constraintName, joint1Name, joint2Name, point1, point2, mask)
 
     ## Create position constraint between two joints only in "z" axis
     #

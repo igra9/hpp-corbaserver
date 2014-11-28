@@ -77,9 +77,9 @@ module hpp
     /// \param joint2Name name of second joint
     /// \param p quaternion representing the desired orientation
     ///        of joint2 in the frame of joint1.
-    /// \param mask Select which axis to be constrained.
     /// If joint1 of joint2 is "", the corresponding joint is replaced by
     /// the global frame.
+    /// \param mask Select which axis to be constrained.
     /// constraints are stored in ProblemSolver object
     void createOrientationConstraint
     (in string constraintName, in string joint1Name,
@@ -95,12 +95,14 @@ module hpp
     /// \param point2 point in local frame of joint2.
     /// If joint1 of joint2 is "", the corresponding joint is replaced by
     /// the global frame.
+    /// \param mask Select which axis to be constrained.
     /// constraints are stored in ProblemSolver object
     void createPositionConstraint (in string constraintName,
 				   in string joint1Name,
 				   in string joint2Name,
 				   in floatSeq point1,
-				   in floatSeq point2)
+				   in floatSeq point2,
+     				   in boolSeq mask)
       raises (Error);
 
     /// Create position constraint between two joints only in "z" axis
